@@ -13,20 +13,22 @@ export default class WeightedCounterWidget {
 
         this.dataProvider.begin();
     }
-
+    cleanUp() {
+        this.dataProvider.close();
+    }
     render(data) {
-        console.log(this)
+        
         let currencySymbol = this.opts.currencySymbol;
         let currentPoints = this.getCurrentPoints(data);
         let nextGoal = this.getNextGoal(currentPoints);
-        let preText = this.opts.defaultText + ": ";
+        let preText = this.opts.defaultText + (this.opts.defaultText.length > 0 ? ": " : "");
         let postText = "";
 
         if (nextGoal) {
             preText = nextGoal.description + ": ";
-            postText = " / " + currencySymbol + nextGoal.value.toString();
+            postText = " / " + currencySymbol + nextGoal.value.toFixed(0);
         }
-        let text = preText + currencySymbol + currentPoints.toString() + postText;
+        let text = preText + currencySymbol + currentPoints.toFixed(0) + postText;
         document.getElementById("widget-root").innerHTML = text; 
     }
 
@@ -37,6 +39,7 @@ export default class WeightedCounterWidget {
             + data.counts.tierThreeSub * this.opts.weights.tierThreeSub
             + data.counts.tips * this.opts.weights.tips
             + data.counts.bits * this.opts.weights.bits
+            + data.counts.primeSub * this.opts.weights.primeSub + (this.opts.override | 0);
         }
         
         return 0;
@@ -55,12 +58,9 @@ export default class WeightedCounterWidget {
 
         let goals = this.opts.goals;
         let sortedGoals = goals.sort((goal, otherGoal) => {return goal.value < otherGoal.value})
-        console.log(goals);
-        console.log(sortedGoals);
+        
         let i = 0;
-        console.log(goals.length)
         while (i < goals.length) {
-            console.log(goals[i].value - currentPoints)
             if (goals[i].value > currentPoints){
                 return goals[i];
             }
@@ -104,8 +104,9 @@ class TestDataProvider extends WeightedCounterWidgetDataProvider{
 
     close() {
         try {
-            this.interval.clearInterval();
+            clearInterval(this.interval);
         } catch (e) {
+            console.log(e)
             console.log("Data Provider not running")
         }
     }
@@ -121,9 +122,9 @@ class TestDataProvider extends WeightedCounterWidgetDataProvider{
         }
         return {
             counts: {
-                tierOneSubs: getRandomInt(50),
-                tierTwoSubs: getRandomInt(10),
-                tierThreeSubs: getRandomInt(1),
+                tierOneSub: getRandomInt(50),
+                tierTwoSub: getRandomInt(10),
+                tierThreeSub: getRandomInt(1),
                 tips: getRandomInt(100),
                 bits: getRandomInt(1000),
             }
@@ -180,5 +181,46 @@ class TestWithDataDataProvider extends WeightedCounterWidgetDataProvider{
 }
 
 class WeightedCounterWidgetDataProviderImpl extends WeightedCounterWidgetDataProvider {
+    constructor(widget) {
+        super(widget);
+        this.socket = null
+        this.interval = null
+    }
 
+    sendPing() {
+        this.socket.send("PING")
+    }
+
+    update(message) {
+        let data = JSON.parse(message.data);
+        console.log(data)
+        this.widget.opts = data.configuration
+        this.widget.render(data)
+    }
+
+    begin() {
+        let params = new URLSearchParams(document.location.search.substring(1));
+        let socket = new WebSocket("wss://websocket.fendull.com?user=" + params.get('user'));
+        socket.onopen = () => {this.sendPing.bind(this)};
+        this.socket = socket;
+        this.socket.onmessage = this.update.bind(this);
+        this.socket.onclose = this.reset.bind(this);
+        setTimeout(this.sendPing.bind(this), 5000);
+        this.interval = setInterval((this.sendPing.bind(this)), 60000);
+    }
+
+    close() {
+        clearInterval(this.interval)
+        this.socket.close();
+    }
+
+    reset() {
+        try {
+            this.close();
+        } catch(e) {
+            console.log(e)
+        }
+        
+        this.begin();
+    }
 }

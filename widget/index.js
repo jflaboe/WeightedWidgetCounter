@@ -1,8 +1,8 @@
 import WeightedCounterWidget from './WeightedCounterWidget.js';
-import { TestWithDataConfigurationProvider } from './WeightedWidgetCounterConfigurationProvider.js';
+import { WeightedWidgetCounterConfigurationProviderImpl } from './WeightedWidgetCounterConfigurationProvider.js';
 
 function getConfiguration() {
-    return new TestWithDataConfigurationProvider().getOptions();
+    return new WeightedWidgetCounterConfigurationProviderImpl().getOptions();
 }
 
 function initialize(config) {
@@ -11,4 +11,5 @@ function initialize(config) {
 
 
 let configuration = getConfiguration();
+console.log(configuration);
 let widget = initialize(configuration);
